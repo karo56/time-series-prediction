@@ -1,0 +1,427 @@
+---
+title: "project 1"
+author: "Karol Mućk"
+date: "25 03 2022"
+output: html_document
+---
+
+# Task 1
+
+```{r, warning = FALSE, message = FALSE}
+library(fpp2)
+library(ggplot2)
+library(forecast)
+```
+
+Fristly, let's read data.
+
+
+```{r}
+www = "https://www.mimuw.edu.pl/~noble/courses/TimeSeries/data/w-gs1yr.txt"
+gs1yr <- read.csv(www, sep="")
+
+
+www2 = "https://www.mimuw.edu.pl/~noble/courses/TimeSeries/data/w-gs3yr.txt"
+gs3yr <- read.csv(www2, sep="")
+
+```
+
+
+
+Create variables
+```{r}
+r1 <- gs1yr$rate
+r3 <- gs3yr$rate
+
+```
+
+and plot r1 and r3
+```{r}
+plot(r1, type='l')
+lines(r3,col="red")
+```
+
+Now, we make linear regression and plot results.
+```{r}
+m1 <- lm(r3~r1)
+
+plot(r1,r3)
+abline(m1, col= 'red')
+```
+
+Looking on the plot, we can see that our regression fit to the data quite well. We also can see that r1 and r3 high linear correlation. Let's analyze this more deeply.
+
+```{r}
+summary(m1)
+```
+
+Looking at resiudals, ideally the quantiles and min/max should be symmetrically away from 0, with the median possibly close to zero. We have this scenario, which is a good indication of our model.
+
+We can see that both slope and intercept have a significant statistical effect on the result because the p-value is very low for them (<<0.05). This confirming that the regression fit very well
+
+Also, $R^2$ is very close to 1, Which agrees with what we see in the graph (all data are very close to the regression).
+
+In summary, our regression fits the data very good.
+
+<font size="5">Let's analyze residuals.</font> 
+
+
+```{r}
+plot(m1$residuals, type = 'l')
+
+acf(m1$residuals, lag=36)
+
+```
+
+
+
+
+As we can see, the residuals are not white noise (for example, in the acf plot).
+
+Now, let's make linear regression on diff values.
+```{r}
+c1 = diff(r1)
+c3 = diff(r3)
+m2 = lm(c3~-1+c1)
+```
+
+And plot the results.
+```{r}
+plot(c1,c3)
+abline(m2, col= 'red')
+```
+
+
+```{r}
+summary(m2)
+```
+
+Again, we can see that differences have linear correlations, so we can expect that our time series should drop and grow on very similar levels.
+
+<font size="5">Let's analyze residuals and fit MA(1) model to residuals</font>
+
+```{r}
+plot(m2$residuals, type ='l')
+```
+
+```{r}
+acf(m2$residuals, lag = 36)
+```
+
+We can see that the acf plot cuts off for the second lag, but the previous one is the most significant, so a good method for fitting the series would be AR(1) or AR(2).
+
+
+Let's fit AR(1) to model using regresion part based on c1 time series.
+```{r}
+m3 = arima(c3, order = c(0,0,1), xreg=c1, include.mean = F)
+m3
+
+```
+and plot results.
+
+```{r}
+plot(c3,col="red", type='l')
+lines(c3- m3$residuals,col="blue")
+```
+
+We can see that regression part of model is equal to $0.7935840$ and aic is super low $(-6267.23)$, and our model fit very vell to data. Model is based on c1 time-seires, so again we can confirm that only looking on c1 time-seires we should be able to predict behaviour of c3 time-series.
+
+```{r}
+m3$coef
+```
+
+<font size="5">Finaly, we calculae $R^{2}$</font>
+
+```{r}
+rsq = (sum(c3^2)-sum(m3$residuals^2))/sum(c3^2)
+rsq
+```
+
+$R^{2}$ is quite high, so this indicates the c3 stock performance moves relatively in line with the c1 index, and our model quite good explain varaiance of c3 time-series. 
+
+<font size="5">Strategy </font> 
+
+We see a high correlation between one time series (I think that one time series responds to the other). A very good strategy is (if we had information about one of the series) to do exactly like that time series i.e. if we know that tomorrow one of the series will rise, our series will also rise and vice versa. So if we know that one of the series will rise tomorrow, we should wait, if we know that it will fall, we should sell.
+
+
+
+# Task 2
+
+Let's read data and make time series x_t and y_t
+```{r, warning = FALSE}
+www = "https://www.mimuw.edu.pl/~noble/courses/TimeSeries/data/sp5may.dat"
+data <- read.csv(www, sep="")
+
+y = diff(data$lnfuture)
+x = diff(data$lnspot)
+
+```
+
+<font size="5">We want to find a model $y_{t} = \beta_{0} +\beta_{1}x_{t} + \epsilon_{t}$ </font> 
+
+Now, we can plot data.
+
+```{r}
+plot(x, type ='l')
+plot(y, type ='l')
+```
+
+
+let's make simple linear regression
+```{r}
+regmodel=lm(y~x)
+summary(regmodel)
+
+```
+
+and plot of the relationship between x_t and y_t
+```{r}
+plot(x,y)
+abline(regmodel, col= 'red')
+```
+
+
+
+Now, we want to analyze resiudals, and find the best model to fit.
+
+```{r}
+reg_residuals = residuals(regmodel)
+
+acf(reg_residuals)
+pacf(reg_residuals)
+```
+
+
+We can fit AR(p) model to resiudals, looking at the acf plot, we should choose p = 1  
+```{r}
+ar1res = arima(reg_residuals,order = c(1,0,0))
+
+ar1res
+
+```
+
+In the <b>ar_value</b> variable we keep the corresponding coefficient for AR(1)
+```{r}
+ar_value <- ar1res$coef[1]
+```
+
+and we can plot our fit
+```{r}
+plot(reg_residuals,col="red", type='l')
+lines(reg_residuals - ar1res$residuals,col="blue")
+```
+
+
+Create new x_t, y_t (based on our fit)
+
+```{r}
+xl = ts.intersect(x, lag(x,-1))
+xnew = xl[,1] - ar_value * xl[,2]
+
+yl = ts.intersect(y, lag(y,-1))
+ynew = yl[,1] - ar_value * yl[,2]
+```
+
+
+Now, we can fit regression to new x_t and y_t, so we can get $y_{t} = \beta_{0} +\beta_{1}x_{t} + \epsilon_{t}$
+```{r}
+new_reg = lm(ynew~xnew)
+
+summary(new_reg)
+```
+
+
+We can see how so $\beta_{0}$ and  $\beta_{1}$ looks like
+```{r}
+new_reg$coefficients
+```
+
+and plot results
+```{r}
+plot(x, y)
+abline(new_reg,col="red")
+```
+
+
+<font size="5">Resiudals </font> 
+
+```{r}
+plot(residuals(new_reg), type='l')
+
+acf(residuals(new_reg))
+pacf(residuals(new_reg))
+```
+
+I think white noise isn't good model for resiudals, but we can try fit it and see resuts.
+
+```{r}
+wh_fit = arima(residuals(new_reg),order = c(0,0,0))
+wh_fit
+tsdiag(wh_fit)
+```
+
+Let's fit ARMA(p,q) to residuals. Looking on the acf and pacf plot is not obvius what p and q we should choose. We will use auto arima to find best model.
+
+```{r}
+auto_fit = auto.arima(residuals(new_reg),  max.d = 0)
+auto_fit
+tsdiag(auto_fit)
+```
+
+
+as I thought ARMA(1,1) was choosen as model for resiudals. This model works better that white noise.
+
+
+
+Now, we are going to fit AR(p) model to residuals.
+Looking on pacf plot, we should choose p = 13, what is strange. So we are going to use auto. arima, but allow only to choose p.
+
+```{r}
+auto_fit2 = auto.arima(residuals(new_reg),  max.d = 0, max.q=0)
+auto_fit2 
+tsdiag(auto_fit2)
+
+```
+
+auto arima choose p = 5, and we can see that AR(5) works a litte bit better than ARMA(1,1).
+
+<font size="5">GLS </font> 
+
+We are going to use gls function to check results. This functions is very slow (need around 10h to compile) so I added screenshoot with results.
+
+```{r}
+# df <- data.frame(x, y)
+# test = gls(y ~ x, data = df, method='ML', correlation=corARMA(p=0,q=1))
+```
+
+![Results of gls function](test.png)
+
+
+We can see that slope and intercept are very close to my regression (but not the same).
+
+# Taks 3
+
+Fristly, read data, create ts object and plot data.
+```{r}
+www = "https://www.mimuw.edu.pl/~noble/courses/TimeSeries/data/q-gdpdef.txt"
+data <- read.csv(www, sep="")
+
+
+my_ts <- ts(data$gdpdef, frequency = 4)
+
+
+#my_ts <- log(my_ts)
+```
+
+
+
+```{r}
+plot(my_ts)
+```
+
+We can see that data is not stationary, so we have to use diff function.
+
+```{r}
+my_ts_diff = diff(my_ts)
+
+plot(my_ts_diff)
+```
+
+Still not good, we can try set differences to 2 and see results.
+```{r}
+my_ts_diff_2 = diff(my_ts, differences = 2)
+
+plot(my_ts_diff_2)
+```
+
+Now, data looks ok, but variance increases. I tested use log() function, but this didn't change the prediction much, so decided to don't use log() and assume that this variance is not a big problem.
+
+We can analyze it and find best model to fit.
+
+```{r}
+acf(my_ts_diff_2)
+```
+
+
+Acf plots significant lags on lag 2, so use MA(2) model shoud be good idea.
+
+
+```{r}
+pacf(my_ts_diff_2)
+```
+
+Pacf plots tells us that also AR(3) model can work too.
+
+Let's fit both models to our time-series.
+
+
+<font size="5">MA(2) </font> 
+```{r}
+fit1 = arima(my_ts,order = c(0,2,2))
+tsdiag(fit1)
+fit1
+```
+
+
+<font size="5">AR(2) </font> 
+```{r}
+fit2 = arima(my_ts,order = c(2,2,0))
+tsdiag(fit2)
+fit2
+```
+
+
+<font size="5">MA(2) + AR(2) </font> 
+```{r}
+fit3 = arima(my_ts,order = c(2,2,2))
+tsdiag(fit3)
+fit3
+
+```
+
+
+<font size="5"> auto.arima </font> 
+```{r}
+fit4 = auto.arima(my_ts)
+tsdiag(fit4)
+
+fit4
+```
+
+
+Looking at the graphs and analyzing the residuals, it seems that the MA(2) model works best. Let's draw it on a graph and plot the prediction.
+
+```{r}
+
+n_start = 200
+n_end = length(my_ts)
+n_pred = 4
+y_dim = 130
+
+# fitted values
+
+plot(n_start:n_end, my_ts[n_start:n_end], xlim = c(n_start, n_end+n_pred+1), ylim=c(min(my_ts[n_start:n_end])+1, y_dim))
+lines(n_start:n_end,my_ts[n_start:n_end], type="l" )
+lines(n_start:n_end, my_ts[n_start:n_end]-fit2$residuals[n_start:n_end], type="l", col="red")
+
+# forecast for 10 steps ahead
+forecast = predict(fit1, n.ahead=4)
+lines((n_end+1):(n_end+n_pred), forecast$pred, type="o", col="red")
+lines((n_end+1):(n_end+n_pred), forecast$pred-1.96*forecast$se, col="blue")
+lines((n_end+1):(n_end+n_pred), forecast$pred+1.96*forecast$se, col="blue")
+
+
+
+```
+
+Red colour is our model, blue is confidence interval.
+
+
+Our predictions for 2009:
+```{r}
+forecast$pred
+```
+
+
+Thanks for reading, that's all.
+
